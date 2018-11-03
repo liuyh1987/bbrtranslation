@@ -456,6 +456,7 @@ Internet-Draft                     BBR                         July 2017
 4.  Detailed Algorithm
 
 4.1.  Maintaining the Network Path Model
+   自适应的网络路径模型
 
    As noted above, BBR is a model-based congestion control algorithm: it
    is based on an explicit model of the network path over which a
@@ -765,17 +766,23 @@ Internet-Draft                     BBR                         July 2017
 4.2.1.  Pacing Rate
 
    To help match the packet-arrival rate to the bottleneck link's
-   departure rate, BBR paces data packets.  Pacing enforces a maximum
-   rate at which BBR schedules packets for transmission.  Pacing is the
+   departure rate, BBR paces data packets.
+   为了让数据包的接收速率和瓶颈链路的发包速率相匹配。   
+   Pacing enforces a maximum
+   rate at which BBR schedules packets for transmission.
+   pacing控制bbr进行数据发送的最大速率。   
+   Pacing is the
    primary mechanism that BBR uses to control its sending behavior; BBR
    implementations MUST implement pacing.
+   pacing是bbr控制它发包行为的首要机制，bbr实现必须实现pacing.
 
    The sending host implements pacing by maintaining inter-packet
    spacing at the time each packet is scheduled for transmission,
+   发送端通过控制数据包的发送间隔来实现pacing.
    calculating the next transmission time for a packet for a given flow
    (here "next_send_time") as a function of the most recent packet size
    and the current pacing rate, as follows:
-
+     通过分组的大小和pacing rate计算给定流的下一个分组的传输时间如下：
      next_send_time = Now() + packet.size / pacing_rate
 
 
@@ -789,27 +796,44 @@ Internet-Draft                     BBR                         July 2017
    To adapt to the bottleneck, in general BBR sets the pacing rate to be
    proportional to BBR.BtlBw, with a dynamic gain, or scaling factor of
    proportionality, called pacing_gain.
+   为了适应瓶颈，bbr设置pacing与bbr.btlbw成一定比例，通过动态的增益或相对的
+   缩小因子，叫做pacing增益。
 
-   When a BBR flow starts it has no BBR.BtlBw estimate.  So in this case
+   当一个bbr流开始的时候它还没测量到bbr.btlbw.
+   When a BBR flow starts it has no BBR.BtlBw estimate.  
+   So in this case
    it sets an initial pacing rate based on the transport sender
    implementation's initial congestion window ("InitialCwnd", e.g. from
-   [RFC6298]), the initial SRTT (smoothed round-trip time) after the
+   [RFC6298]),
+   因此在这种情况下，它基于发送方实现的初始的拥塞窗口，   
+   the initial SRTT (smoothed round-trip time) after the
    first non-zero RTT sample, and the initial pacing_gain:
-
+　 初始的srtt, 初始的pacing增益设置pacing值。
+   
      BBRInitPacingRate():
        nominal_bandwidth = InitialCwnd / (SRTT ? SRTT : 1ms)
        BBR.pacing_rate =  BBR.pacing_gain * nominal_bandwidth
-
+　　
    After initialization, on each data ACK BBR updates its pacing rate to
-   be proportional to BBR.BtlBw, as long as it estimates that it has
+   be proportional to BBR.BtlBw, 
+   在初始化之后，在没ack更新的时候bbr设置pacing为bbr.btlbw的倍数，
+   as long as it estimates that it has
    filled the pipe (BBR.filled_pipe is true; see the "Startup" section
-   below for details), or doing so increases the pacing rate.  Limiting
+   below for details), or doing so increases the pacing rate.
+　 直到它探测到管道已经被填满，或者这样做增加了pacing速率。   
+   Limiting
    the pacing rate updates in this way helps the connection probe
    robustly for bandwidth until it estimates it has reached its full
-   available bandwidth ("filled the pipe").  In particular, this
+   available bandwidth ("filled the pipe").
+　 以这种方式更新pacing有助于连接已稳健的方式探测带宽，直到它探测到带宽
+　　已全部占满。   
+   In particular, this
    prevents the pacing rate from being reduced when the connection has
-   only seen application-limited samples.  BBR updates the pacing rate
+   only seen application-limited samples.
+　 特别是可以防止连接在只有application-limited样本时引起的pacing减小。
+   BBR updates the pacing rate
    on each ACK by executing the BBRSetPacingRate() step as follows:
+   bbr在每个ACK的时候通过BBRSetPacingRate更新pacing的步骤如下:
 
      BBRSetPacingRateWithGain(pacing_gain):
        rate = pacing_gain * BBR.BtlBw
@@ -853,7 +877,7 @@ Internet-Draft                     BBR                         July 2017
          BBR.send_quantum = 1 * MSS
        else if (BBR.pacing_rate < 24 Mbps)
          BBR.send_quantum  = 2 * MSS
-       else
+       else   
          BBR.send_quantum  = min(BBR.pacing_rate * 1ms, 64KBytes)
 
    A BBR implementation MAY use alternate approaches to select a
@@ -866,29 +890,48 @@ Internet-Draft                     BBR                         July 2017
 4.2.3.  Congestion Window
 
    The congestion window, or cwnd, controls the maximum volume of data
-   BBR allows in flight in the network at any time.  BBR's adapts the
+   BBR allows in flight in the network at any time.
+   拥塞窗口控制着在网络中运行传输的最大的数据量。
+   BBR's adapts the
    cwnd based on its model of the network path and the state machine's
    decisions about how to probe that path.
+   bbr根据他的网络路径模型和状态机（决定了如何探测这个网络模型）调整拥塞窗口。
 
    By default, BBR grows its cwnd to meet its target cwnd,
    BBR.target_cwnd, which is scaled to adapt to the estimated BDP
-   computed from its path model.  But BBR's selection of cwnd is
+   computed from its path model.  
+   默认情况下，bbr增加它的cwd以匹配bbr.target_cwnd, 后者根据网络路径模型
+   计算缩放因子以调整BDP.
+   
+   But BBR's selection of cwnd is
    designed to explicitly trade off among competing considerations that
-   dynamically adapt to various conditions.  So in loss recovery BBR
+   dynamically adapt to various conditions.  
+   但是bbr选择它的拥塞窗口旨在权衡各种考虑以便动态地适配各种环境。
+   
+   So in loss recovery BBR
    more conservatively adjusts its sending behavior based on more recent
    delivery samples, and if BBR needs to re-probe the current BBR.RTprop
-   of the path then it cuts its cwnd accordingly.  The following
+   of the path then it cuts its cwnd accordingly.  
+   因此在丢包恢复情况下bbr根据最近的传输样本更加谨慎地调整它的发送行为，如果bbr
+   需要重新探测BBR.RTprop它会削减拥塞窗口。
+   The following
    sections describe the various considerations that impact cwnd.
+   下面几节描述了影响拥塞窗口的各种考虑因素。
 
 4.2.3.1.  Initial cwnd
 
    At its core, BBR is about using measurements to build a model of the
    network path and then adapting control decisions to the path based on
-   that model.  As such, the selection of the initial cwnd is considered
+   that model.
+　　bbr的核心思想是根据测量来构建一个网络路径模型然后根据这个模型不断地调整控制行为。   
+   As such, the selection of the initial cwnd is considered
    to be outside the scope of the BBR algorithm, since at initialization
-   there are no measurements yet upon which BBR can operate.  Thus, at
+   there are no measurements yet upon which BBR can operate.
+　 因此考虑初始的拥塞窗口超出了bbr算法的范围，因为在开始的时候是没法测量的。   
+   Thus, at
    initialization, BBR uses the transport sender implementation's
    initial congestion window (e.g. from [RFC6298] for TCP).
+   因此在初始化的时候bbr使用发送方实现的初始化拥塞窗口。
 
 
 
@@ -901,11 +944,19 @@ Internet-Draft                     BBR                         July 2017
 4.2.3.2.  Target cwnd
 
    The BBR BBR.target_cwnd is the upper bound on the volume of data BBR
-   allows in flight.  This bound is always in place, and dominates when
-   all other considerations have been satisfied: the flow is not in loss
+   allows in flight.
+　　bbr.target_cwnd是bbr所允许传输的数据量的上限。   
+   This bound is always in place, and dominates when
+   all other considerations have been satisfied: 
+   这种界限始终存在，并且在以下各种因素都满足的情况下占支配
+   地位。
+   
+   the flow is not in loss
    recovery, does not need to probe BBR.RTprop, and has accumulated
    confidence in its model parameters by receiving enough ACKs to
    gradually grow the current cwnd to meet the BBR.target_cwnd.
+   这个流没处于丢包恢复阶段，并且并不需要去探测BBR.RTprop，而且对接收
+   ack足步地增加当前cwnd以达到BBR.target_cwnd累积了足够的信心。
 
    On each ACK, BBR calculates the BBR.target_cwnd as follows:
 
